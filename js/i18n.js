@@ -1,0 +1,121 @@
+// Тексты сайта на двух языках
+window.I18N = {
+  ru: {
+    tagline: "Бархоппинг по Алматы",
+    enterCode: "Введите код экскурсии",
+    codeHint: "Код есть у вашего гида и на QR-коде",
+    codePh: "Например, NOV04",
+    go: "Дальше",
+    tourNotFound: "Экскурсия не найдена. Проверьте код.",
+    loadError: "Не удалось загрузить данные. Проверьте интернет и обновите страницу.",
+    welcome: "Добро пожаловать!",
+    welcomeText: "Сегодня мы гуляем по барам Алматы. Оценивайте бары и записывайте коктейли — в конце вечера у вас останется открытка на память.",
+    yourName: "Как вас зовут?",
+    namePh: "Имя",
+    start: "Начать вечер",
+    tabBars: "Бары",
+    tabMy: "Мой вечер",
+    stop: "Остановка",
+    rateBar: "Оценка бара",
+    cocktails: "Коктейли",
+    cocktailName: "Название коктейля",
+    cocktailNote: "Впечатления (необязательно)",
+    addCocktail: "+ Ещё коктейль",
+    remove: "Убрать",
+    comment: "Отзыв о баре",
+    commentPh: "Атмосфера, музыка, бармены…",
+    save: "Сохранить",
+    saving: "Сохраняю…",
+    saved: "Сохранено ✓",
+    saveError: "Не получилось сохранить. Проверьте интернет и попробуйте ещё раз.",
+    ratingRequired: "Поставьте бару оценку (звёздочки)",
+    notRated: "Ещё не оценён",
+    cocktailsN: "коктейлей: {n}",
+    openMap: "Открыть на карте",
+    myEmpty: "Пока пусто — оцените первый бар!",
+    goToBars: "К барам",
+    favorite: "Коктейль вечера",
+    downloadCard: "Скачать открытку",
+    share: "Поделиться",
+    myLinkTitle: "Ваша личная ссылка",
+    myLinkText: "Сохраните её — по ней можно в любой момент вернуться к своим отзывам, даже с другого телефона.",
+    copy: "Скопировать",
+    copied: "Скопировано!",
+    hi: "Привет, {name}!",
+    progress: "Оценено {a} из {b}",
+    demo: "Демо-режим: данные хранятся только в этом браузере",
+    cardNight: "Мой вечер",
+    cardOf: "{name} · {date}",
+    thanks: "Спасибо, что были с нами!",
+    shareText: "Мой вечер с Cocktails with the Local 🍸"
+  },
+  en: {
+    tagline: "Almaty bar hopping",
+    enterCode: "Enter your tour code",
+    codeHint: "Your guide has the code — it's also on the QR",
+    codePh: "e.g. NOV04",
+    go: "Continue",
+    tourNotFound: "Tour not found. Please check the code.",
+    loadError: "Couldn't load data. Check your connection and refresh.",
+    welcome: "Welcome!",
+    welcomeText: "Tonight we're hopping around Almaty's bars. Rate the bars and note your cocktails — at the end you'll get a postcard to remember the night.",
+    yourName: "What's your name?",
+    namePh: "Name",
+    start: "Start the night",
+    tabBars: "Bars",
+    tabMy: "My night",
+    stop: "Stop",
+    rateBar: "Rate the bar",
+    cocktails: "Cocktails",
+    cocktailName: "Cocktail name",
+    cocktailNote: "Your thoughts (optional)",
+    addCocktail: "+ Another cocktail",
+    remove: "Remove",
+    comment: "Your review",
+    commentPh: "Vibe, music, bartenders…",
+    save: "Save",
+    saving: "Saving…",
+    saved: "Saved ✓",
+    saveError: "Couldn't save. Check your connection and try again.",
+    ratingRequired: "Please rate the bar (stars)",
+    notRated: "Not rated yet",
+    cocktailsN: "cocktails: {n}",
+    openMap: "Open in maps",
+    myEmpty: "Nothing here yet — rate your first bar!",
+    goToBars: "Go to bars",
+    favorite: "Cocktail of the night",
+    downloadCard: "Download postcard",
+    share: "Share",
+    myLinkTitle: "Your personal link",
+    myLinkText: "Save it — it brings you back to your reviews any time, even from another phone.",
+    copy: "Copy",
+    copied: "Copied!",
+    hi: "Hi, {name}!",
+    progress: "Rated {a} of {b}",
+    demo: "Demo mode: data is stored in this browser only",
+    cardNight: "My night out",
+    cardOf: "{name} · {date}",
+    thanks: "Thanks for hopping with us!",
+    shareText: "My night with Cocktails with the Local 🍸"
+  }
+};
+
+window.getLang = function () {
+  try {
+    const saved = localStorage.getItem("cwl_lang");
+    if (saved === "ru" || saved === "en") return saved;
+  } catch (e) {}
+  return (navigator.language || "ru").toLowerCase().startsWith("ru") ? "ru" : "en";
+};
+
+window.setLang = function (lang) {
+  try { localStorage.setItem("cwl_lang", lang); } catch (e) {}
+  document.documentElement.lang = lang;
+};
+
+window.t = function (key, vars) {
+  const lang = window.CURRENT_LANG || "ru";
+  let s = (I18N[lang] && I18N[lang][key]) || I18N.ru[key] || key;
+  if (vars) for (const k in vars) s = s.split("{" + k + "}").join(vars[k]);
+  return s;
+};
