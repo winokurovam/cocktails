@@ -40,9 +40,9 @@
 
 1. В репозитории на GitHub: **Settings → Pages**.
 2. *Source*: **Deploy from a branch**, ветка `main`, папка `/ (root)`, затем **Save**.
-3. Через минуту сайт будет доступен по адресу `https://<ваш-логин>.github.io/<репозиторий>/`.
-   - Страница для гостей: `…/index.html`
-   - Кабинет гида: `…/admin.html`
+3. Через минуту сайт будет доступен:
+   - для гостей: <https://winokurovam.github.io/Barhopping-/>
+   - кабинет гида: <https://winokurovam.github.io/Barhopping-/admin.html>
 
 ## Как проводить экскурсию
 
