@@ -4,10 +4,17 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Cocktails with the Local</title>
-  <meta http-equiv="refresh" content="0; url=/Barhopping-/">
   <style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0c271d;color:#fff4f8;font-family:system-ui,sans-serif}a{color:#ff5fa2}</style>
+  <script>
+    // Отправляем на главную. Работает при любом названии репозитория и со своим доменом.
+    (function () {
+      var seg = location.pathname.split("/")[1];
+      var home = location.hostname.endsWith(".github.io") && seg ? "/" + seg + "/" : "/";
+      location.replace(home);
+    })();
+  </script>
 </head>
 <body>
-  <p>🍸 <a href="/Barhopping-/">Cocktails with the Local</a></p>
+  <p>🍸 <a href="/">Cocktails with the Local</a></p>
 </body>
 </html>

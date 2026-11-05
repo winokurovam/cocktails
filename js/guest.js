@@ -396,85 +396,142 @@
     return text + "…";
   }
 
+  function wrap(ctx, text, maxW, maxLines) {
+    const words = String(text || "").replace(/\s+/g, " ").trim().split(" ");
+    const lines = [];
+    let cur = "";
+    for (const w of words) {
+      const test = cur ? cur + " " + w : w;
+      if (ctx.measureText(test).width <= maxW || !cur) cur = test;
+      else { lines.push(cur); cur = w; }
+    }
+    if (cur) lines.push(cur);
+    if (lines.length > maxLines) {
+      lines.length = maxLines;
+      lines[maxLines - 1] = fit(ctx, lines[maxLines - 1] + "…", maxW);
+    }
+    return lines.map((l) => fit(ctx, l, maxW));
+  }
+
   async function makeCard() {
     try { await document.fonts.ready; } catch (e) {}
-    const W = 1080, H = 1350, P = 80;
+    const W = 1080, P = 80;
+    const PINK = "#ff5fa2", GREEN = "#3ddc97", TEXT = "#fff4f8", MUTED = "#a9cbbb", SOFT = "#ffd3e6";
+    const rated = state.tour.bars.map((b, i) => ({ b, i, r: state.reviews[b.id] })).filter((x) => x.r);
+    const fav = favorite();
+    const nCocktails = rated.reduce((s, x) => s + (x.r.cocktails || []).length, 0);
+    const ig = (window.APP_CONFIG || {}).INSTAGRAM;
+
+    // Рисуем дважды: сначала только считаем высоту, потом рисуем на холсте нужного размера
+    function layout(ctx, H, draw) {
+      const txt = (s, x, y) => { if (draw) ctx.fillText(s, x, y); };
+      if (draw) {
+        const g = ctx.createLinearGradient(0, 0, W, H);
+        g.addColorStop(0, "#0c271d"); g.addColorStop(1, "#164330");
+        ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+        ctx.globalAlpha = 0.22; ctx.fillStyle = PINK;
+        ctx.beginPath(); ctx.arc(W - 40, 60, 300, 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = 0.14; ctx.fillStyle = GREEN;
+        ctx.beginPath(); ctx.arc(40, H - 40, 280, 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = "rgba(255,255,255,0.15)"; ctx.lineWidth = 3;
+        ctx.strokeRect(36, 36, W - 72, H - 72);
+      }
+      ctx.textBaseline = "alphabetic"; ctx.textAlign = "left";
+
+      // заголовок
+      ctx.fillStyle = TEXT; ctx.font = "700 62px Unbounded, sans-serif";
+      txt("Cocktails with", P, 170);
+      ctx.fillStyle = PINK; txt("the Local", P, 245);
+      ctx.fillStyle = MUTED; ctx.font = "600 34px Manrope, sans-serif";
+      txt(fit(ctx, t("tagline") + " · " + t("cardNight"), W - 2 * P), P, 305);
+      ctx.fillStyle = TEXT; ctx.font = "800 40px Manrope, sans-serif";
+      txt(fit(ctx, t("cardOf", { name: state.guest.name, date: fmtDate(state.tour.date) }), W - 2 * P), P, 375);
+      ctx.fillStyle = GREEN; ctx.font = "700 30px Manrope, sans-serif";
+      txt(t("cardStats", { b: rated.length, c: nCocktails }), P, 425);
+
+      // разделитель
+      let y = 470;
+      if (draw) { ctx.fillStyle = "rgba(255,255,255,0.12)"; ctx.fillRect(P, y - 10, W - 2 * P, 2); }
+      y += 60;
+
+      const textX = P + 80, textW = W - P - textX;
+      for (const { b, i, r } of rated) {
+        // номер и звёзды
+        if (draw) {
+          ctx.fillStyle = PINK;
+          ctx.beginPath(); ctx.arc(P + 26, y - 14, 28, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = "#fff"; ctx.font = "700 26px Unbounded, sans-serif"; ctx.textAlign = "center";
+          ctx.fillText(String(i + 1), P + 26, y - 4); ctx.textAlign = "left";
+          ctx.fillStyle = PINK; ctx.font = "700 38px sans-serif"; ctx.textAlign = "right";
+          ctx.fillText(starsText(r.rating), W - P, y); ctx.textAlign = "left";
+        }
+        // название бара (до 2 строк)
+        ctx.fillStyle = TEXT; ctx.font = "800 40px Manrope, sans-serif";
+        const nameLines = wrap(ctx, b.name, textW - 230, 2);
+        nameLines.forEach((l, k) => txt(l, textX, y + k * 48));
+        y += nameLines.length * 48 + 6;
+
+        // все коктейли
+        for (const cl of r.cocktails || []) {
+          ctx.font = "700 32px Manrope, sans-serif";
+          ctx.fillStyle = GREEN; txt("🍸", textX, y);
+          ctx.fillStyle = TEXT;
+          const stars = cl.rating ? "★".repeat(cl.rating) : "";
+          ctx.font = "700 32px Manrope, sans-serif";
+          const nm = fit(ctx, cl.name, textW - 60 - (stars ? 190 : 0));
+          txt(nm, textX + 52, y);
+          if (stars) {
+            const w = ctx.measureText(nm).width;
+            ctx.fillStyle = PINK; ctx.font = "700 28px sans-serif";
+            txt(stars, textX + 52 + w + 14, y - 2);
+          }
+          y += 42;
+          if (cl.note) {
+            ctx.fillStyle = MUTED; ctx.font = "italic 500 28px Manrope, sans-serif";
+            const nl = wrap(ctx, cl.note, textW - 52, 3);
+            nl.forEach((l, k) => txt(l, textX + 52, y + k * 36));
+            y += nl.length * 36 + 4;
+          }
+          y += 8;
+        }
+        // отзыв о баре
+        if (r.comment) {
+          y += 6;
+          ctx.fillStyle = SOFT; ctx.font = "500 30px Manrope, sans-serif";
+          const cl = wrap(ctx, "«" + r.comment + "»", textW, 6);
+          cl.forEach((l, k) => txt(l, textX, y + k * 40));
+          y += cl.length * 40;
+        }
+        y += 56;
+      }
+
+      // коктейль вечера
+      if (fav) {
+        const bx = P, by = y, bw = W - 2 * P, bh = 150;
+        if (draw) {
+          ctx.fillStyle = "rgba(255,95,162,0.18)";
+          ctx.strokeStyle = "rgba(255,95,162,0.6)"; ctx.lineWidth = 3;
+          roundRect(ctx, bx, by, bw, bh, 26); ctx.fill(); ctx.stroke();
+        }
+        ctx.fillStyle = SOFT; ctx.font = "700 26px Manrope, sans-serif";
+        txt(t("favorite").toUpperCase() + " · " + fit(ctx, fav.bar, 420), bx + 36, by + 52);
+        ctx.fillStyle = TEXT; ctx.font = "700 46px Unbounded, sans-serif";
+        txt(fit(ctx, "🍸 " + fav.name, bw - 72), bx + 36, by + 115);
+        y += bh + 40;
+      }
+      y = Math.max(y + 40, H - 82); // подпись прижата к низу открытки
+      ctx.fillStyle = MUTED; ctx.font = "700 30px Manrope, sans-serif"; ctx.textAlign = "center";
+      txt(t("thanks") + (ig ? "  @" + ig : ""), W / 2, y);
+      ctx.textAlign = "left";
+      return y + 90;
+    }
+
+    const probe = document.createElement("canvas").getContext("2d");
+    const H = Math.max(1350, Math.ceil(layout(probe, 0, false)));
     const c = document.createElement("canvas");
     c.width = W; c.height = H;
-    const ctx = c.getContext("2d");
-    const PINK = "#ff5fa2", GREEN = "#3ddc97", TEXT = "#fff4f8", MUTED = "#a9cbbb";
-
-    // фон
-    const g = ctx.createLinearGradient(0, 0, W, H);
-    g.addColorStop(0, "#0c271d"); g.addColorStop(1, "#164330");
-    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-    ctx.globalAlpha = 0.22; ctx.fillStyle = PINK;
-    ctx.beginPath(); ctx.arc(W - 40, 60, 300, 0, Math.PI * 2); ctx.fill();
-    ctx.globalAlpha = 0.14; ctx.fillStyle = GREEN;
-    ctx.beginPath(); ctx.arc(40, H - 40, 280, 0, Math.PI * 2); ctx.fill();
-    ctx.globalAlpha = 1;
-    ctx.strokeStyle = "rgba(255,255,255,0.15)"; ctx.lineWidth = 3;
-    ctx.strokeRect(36, 36, W - 72, H - 72);
-
-    // заголовок
-    ctx.textBaseline = "alphabetic";
-    ctx.fillStyle = TEXT; ctx.font = "700 62px Unbounded, sans-serif";
-    ctx.fillText("Cocktails with", P, 170);
-    ctx.fillStyle = PINK; ctx.fillText("the Local", P, 245);
-    ctx.fillStyle = MUTED; ctx.font = "600 34px Manrope, sans-serif";
-    ctx.fillText(fit(ctx, t("tagline") + " · " + t("cardNight"), W - 2 * P), P, 305);
-    ctx.fillStyle = TEXT; ctx.font = "800 40px Manrope, sans-serif";
-    ctx.fillText(fit(ctx, t("cardOf", { name: state.guest.name, date: fmtDate(state.tour.date) }), W - 2 * P), P, 375);
-
-    // бары
-    const fav = favorite();
-    const bottomLimit = fav ? H - 330 : H - 190;
-    let y = 460;
-    const rated = state.tour.bars.map((b, i) => ({ b, i, r: state.reviews[b.id] })).filter((x) => x.r);
-    for (let k = 0; k < rated.length; k++) {
-      const { b, i, r } = rated[k];
-      const lines = (r.cocktails || []).slice(0, 2);
-      const need = 70 + lines.length * 44;
-      if (y + need > bottomLimit) {
-        ctx.fillStyle = MUTED; ctx.font = "700 34px Manrope, sans-serif";
-        ctx.fillText("+ " + (rated.length - k) + " …", P, y);
-        break;
-      }
-      ctx.fillStyle = PINK;
-      ctx.beginPath(); ctx.arc(P + 26, y - 14, 28, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = "#fff"; ctx.font = "700 26px Unbounded, sans-serif"; ctx.textAlign = "center";
-      ctx.fillText(String(i + 1), P + 26, y - 4); ctx.textAlign = "left";
-      ctx.font = "800 40px Manrope, sans-serif"; ctx.fillStyle = TEXT;
-      const starsW = 210;
-      ctx.fillText(fit(ctx, b.name, W - 2 * P - 80 - starsW), P + 76, y);
-      ctx.fillStyle = PINK; ctx.font = "700 38px sans-serif"; ctx.textAlign = "right";
-      ctx.fillText(starsText(r.rating), W - P, y); ctx.textAlign = "left";
-      y += 50;
-      ctx.font = "600 31px Manrope, sans-serif";
-      for (const cl of lines) {
-        ctx.fillStyle = GREEN; ctx.fillText("•", P + 80, y);
-        ctx.fillStyle = MUTED;
-        ctx.fillText(fit(ctx, cl.name + (cl.rating ? "  " + "★".repeat(cl.rating) : ""), W - 2 * P - 110), P + 110, y);
-        y += 44;
-      }
-      y += 34;
-    }
-
-    // коктейль вечера
-    if (fav) {
-      const bx = P, by = H - 300, bw = W - 2 * P, bh = 150;
-      ctx.fillStyle = "rgba(255,95,162,0.18)";
-      ctx.strokeStyle = "rgba(255,95,162,0.6)"; ctx.lineWidth = 3;
-      roundRect(ctx, bx, by, bw, bh, 26); ctx.fill(); ctx.stroke();
-      ctx.fillStyle = "#ffd3e6"; ctx.font = "700 26px Manrope, sans-serif";
-      ctx.fillText(t("favorite").toUpperCase(), bx + 36, by + 52);
-      ctx.fillStyle = TEXT; ctx.font = "700 46px Unbounded, sans-serif";
-      ctx.fillText(fit(ctx, "🍸 " + fav.name, bw - 72), bx + 36, by + 115);
-    }
-    ctx.fillStyle = MUTED; ctx.font = "700 30px Manrope, sans-serif"; ctx.textAlign = "center";
-    const ig = (window.APP_CONFIG || {}).INSTAGRAM;
-    ctx.fillText(t("thanks") + (ig ? "  @" + ig : ""), W / 2, H - 82);
-    ctx.textAlign = "left";
+    layout(c.getContext("2d"), H, true);
     return c;
   }
   function roundRect(ctx, x, y, w, h, r) {

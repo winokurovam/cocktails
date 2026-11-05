@@ -49,6 +49,7 @@ window.I18N = {
     thanks: "Спасибо, что были с нами!",
     shareText: "Мой вечер с Cocktails with the Local 🍸",
     secretStop: "Секретная остановка",
+    cardStats: "Баров: {b} · Коктейлей: {c}",
     secretText: "Куда идём дальше — сюрприз! Бар появится здесь, когда мы придём 🤫",
     newBar: "Открыта новая остановка! 🍸",
     waitNext: "Отлично! Следующий бар — секрет. Он появится здесь, когда мы придём 🤫"
@@ -102,6 +103,7 @@ window.I18N = {
     thanks: "Thanks for hopping with us!",
     shareText: "My night with Cocktails with the Local 🍸",
     secretStop: "Secret stop",
+    cardStats: "Bars: {b} · Cocktails: {c}",
     secretText: "Where we go next is a surprise! The bar will appear here when we arrive 🤫",
     newBar: "A new stop is open! 🍸",
     waitNext: "Great! The next bar is a secret — it'll appear here when we arrive 🤫"
