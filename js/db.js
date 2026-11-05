@@ -64,6 +64,9 @@
       async deleteTour(id) {
         check(await sb.from("tours").delete().eq("id", id));
       },
+      async setRevealed(id, n) {
+        check(await sb.from("tours").update({ revealed: n }).eq("id", id));
+      },
       async listReviews() {
         return check(await sb.from("reviews").select("*").order("created_at", { ascending: false }));
       }
@@ -85,8 +88,8 @@
       };
     }
     function load() {
-      if (mem) return mem;
-      try { mem = JSON.parse(localStorage.getItem(KEY)); } catch (e) {}
+      // читаем заново каждый раз, чтобы вкладки гида и гостя видели изменения друг друга
+      try { mem = JSON.parse(localStorage.getItem(KEY)) || mem; } catch (e) {}
       if (!mem) { mem = seed(); persist(); }
       return mem;
     }
@@ -100,9 +103,11 @@
         const d = load();
         const tour = d.tours.find((x) => x.code.toUpperCase() === String(code).trim().toUpperCase());
         if (!tour) return null;
+        const revealed = tour.revealed ?? 1;
         return {
           id: tour.id, code: tour.code, date: tour.tour_date, title: tour.title,
-          bars: tour.bar_ids.map((id) => d.bars.find((b) => b.id === id)).filter(Boolean).map(clone)
+          total: tour.bar_ids.length,
+          bars: tour.bar_ids.slice(0, revealed).map((id) => d.bars.find((b) => b.id === id)).filter(Boolean).map(clone)
         };
       },
       async getMyReviews(tourId, guestId) {
@@ -110,6 +115,9 @@
       },
       async saveReview(r) {
         const d = load();
+        const tour = d.tours.find((x) => x.id === r.tour_id);
+        const pos = tour ? tour.bar_ids.indexOf(r.bar_id) : -1;
+        if (pos < 0 || pos >= (tour.revealed ?? 1)) throw new Error("bar is not open in this tour");
         const i = d.reviews.findIndex((x) => x.tour_id === r.tour_id && x.bar_id === r.bar_id && x.guest_id === r.guest_id);
         const now = new Date().toISOString();
         if (i >= 0) d.reviews[i] = Object.assign(d.reviews[i], clone(r), { updated_at: now });
@@ -143,7 +151,12 @@
         const dup = d.tours.find((x) => x.code.toUpperCase() === tour.code.toUpperCase() && x.id !== tour.id);
         if (dup) throw new Error("Такой код уже занят другой экскурсией.");
         if (tour.id) Object.assign(d.tours.find((x) => x.id === tour.id), tour);
-        else d.tours.push(Object.assign({ id: uuid() }, tour));
+        else d.tours.push(Object.assign({ id: uuid(), revealed: 1 }, tour));
+        persist();
+      },
+      async setRevealed(id, n) {
+        const d = load();
+        d.tours.find((x) => x.id === id).revealed = n;
         persist();
       },
       async deleteTour(id) {

@@ -137,6 +137,10 @@ select option { background: var(--bg2); }
 /* Бары */
 .bar { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); margin-top: 12px; overflow: hidden; }
 .bar.done { border-color: rgba(61, 220, 151, 0.45); }
+.bar.secret { border-style: dashed; background: rgba(255, 95, 162, 0.06); }
+.bar.secret .bar-head { cursor: default; }
+.bar.secret .stop-num { background: transparent; }
+.bar.secret .bar-name { color: var(--pink-soft); }
 .bar-head {
   width: 100%; display: flex; align-items: center; gap: 14px; text-align: left;
   background: transparent; border: 0; padding: 16px; cursor: pointer;
@@ -192,7 +196,7 @@ select option { background: var(--bg2); }
 /* Тост */
 .toast {
   position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 20px); opacity: 0;
-  background: var(--green); color: #07301f; font-weight: 800; padding: 12px 20px; border-radius: 999px;
+  background: var(--green); color: #07301f; font-weight: 800; padding: 12px 20px; border-radius: 18px; width: max-content;
   box-shadow: 0 10px 30px rgba(0,0,0,.35); transition: all .25s; pointer-events: none; z-index: 50;
   max-width: calc(100% - 32px); text-align: center;
 }
@@ -209,7 +213,8 @@ select option { background: var(--bg2); }
 .list-item .title { font-weight: 800; }
 .tag { display: inline-block; font-size: 12px; font-weight: 800; padding: 2px 8px; border-radius: 6px; background: rgba(255,95,162,.18); color: var(--pink-soft); letter-spacing: 1px; }
 .tag.g { background: rgba(61,220,151,.18); color: var(--green-soft); }
-.route { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.reveal { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; padding: 10px; border-radius: 12px; background: rgba(255,95,162,.08); border: 1px dashed rgba(255,95,162,.35); }
+.route {display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
 .route-item { display: flex; align-items: center; gap: 8px; background: rgba(0,0,0,.2); border: 1px solid var(--line); border-radius: 10px; padding: 6px 8px; }
 .route-item .n { width: 24px; height: 24px; border-radius: 50%; background: var(--pink); color: #fff; font-size: 12px; font-weight: 800; display: grid; place-items: center; flex: none; }
 .route-item .nm { flex: 1; min-width: 0; overflow-wrap: anywhere; }

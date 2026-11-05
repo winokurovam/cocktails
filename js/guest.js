@@ -24,7 +24,7 @@
     el.textContent = msg;
     el.className = "toast show" + (bad ? " bad" : "");
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => (el.className = "toast" + (bad ? " bad" : "")), 2600);
+    toastTimer = setTimeout(() => (el.className = "toast" + (bad ? " bad" : "")), msg.length > 40 ? 5000 : 2600);
   }
 
   // ---------- язык ----------
@@ -105,7 +105,7 @@
   function renderMain() {
     const { tour, guest } = state;
     const done = tour.bars.filter((b) => state.reviews[b.id]).length;
-    const total = tour.bars.length;
+    const total = tour.total;
     app.innerHTML = `
       <div class="greet">
         <h1>${esc(t("hi", { name: guest.name }))}</h1>
@@ -121,7 +121,22 @@
   }
 
   function barsTab() {
-    return state.tour.bars.map((bar, i) => barCard(bar, i)).join("");
+    const { bars, total } = state.tour;
+    let h = bars.map((bar, i) => barCard(bar, i)).join("");
+    for (let i = bars.length; i < total; i++) {
+      h += `
+        <article class="bar secret">
+          <div class="bar-head">
+            <span class="stop-num">?</span>
+            <span class="bar-title">
+              <span class="small muted">${esc(t("stop"))} ${i + 1}</span>
+              <span class="bar-name">🤫 ${esc(t("secretStop"))}</span>
+              ${i === bars.length ? `<span class="bar-sub">${esc(t("secretText"))}</span>` : ""}
+            </span>
+          </div>
+        </article>`;
+    }
+    return h;
   }
 
   function barCard(bar, i) {
@@ -333,8 +348,9 @@
       const next = state.tour.bars.find((b) => !state.reviews[b.id]);
       state.open = next ? next.id : null;
       renderMain();
-      toast(t("saved"));
-      if (!next) { state.tab = "my"; renderMain(); window.scrollTo({ top: 0, behavior: "smooth" }); }
+      const moreSecret = state.tour.bars.length < state.tour.total;
+      toast(!next && moreSecret ? t("waitNext") : t("saved"));
+      if (!next && !moreSecret) { state.tab = "my"; renderMain(); window.scrollTo({ top: 0, behavior: "smooth" }); }
     } catch (err) {
       console.error(err);
       btn.disabled = false;
@@ -467,6 +483,38 @@
     ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
   }
 
+  // ---------- новые бары: гид открывает их по ходу вечера ----------
+  let pollTimer = null;
+  function startPolling() {
+    if (pollTimer) return;
+    pollTimer = setInterval(checkForNewBars, 20000);
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) checkForNewBars(); });
+  }
+  async function checkForNewBars() {
+    if (document.hidden || !state.tour || !state.guest?.name || state.view !== renderMain) return;
+    // не перерисовываем, пока гость печатает — проверим в следующий раз
+    const ae = document.activeElement;
+    if (ae && app.contains(ae) && /INPUT|TEXTAREA/.test(ae.tagName)) return;
+    let fresh;
+    try { fresh = await DB.getTour(state.tour.code); } catch (e) { return; }
+    if (!fresh) return;
+    if (fresh.total == null) fresh.total = fresh.bars.length;
+    const before = state.tour.bars.length;
+    if (fresh.bars.length === before && fresh.total === state.tour.total) return;
+    const added = fresh.bars.length > before;
+    state.tour = fresh;
+    if (added) {
+      const next = fresh.bars.find((b) => !state.reviews[b.id]);
+      if (next && !state.open) state.open = next.id;
+      state.tab = "bars";
+    }
+    renderMain();
+    if (added) {
+      toast(t("newBar"));
+      if (navigator.vibrate) navigator.vibrate(150);
+    }
+  }
+
   // ---------- загрузка ----------
   async function loadTour(code) {
     show(() => (app.innerHTML = `<div class="loading">🍸 …</div>`));
@@ -474,7 +522,9 @@
     try { tour = await DB.getTour(code); }
     catch (e) { console.error(e); return show(() => (app.innerHTML = `<section class="card hero"><p class="err">${esc(t("loadError"))}</p></section>`)); }
     if (!tour) return codeScreen(t("tourNotFound"));
+    if (tour.total == null) tour.total = tour.bars.length;
     state.tour = tour;
+    startPolling();
     state.reviews = {}; state.drafts = {}; state.open = null;
 
     const key = "cwl_guest_" + tour.code.toUpperCase();

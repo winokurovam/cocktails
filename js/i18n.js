@@ -47,7 +47,11 @@ window.I18N = {
     cardNight: "Мой вечер",
     cardOf: "{name} · {date}",
     thanks: "Спасибо, что были с нами!",
-    shareText: "Мой вечер с Cocktails with the Local 🍸"
+    shareText: "Мой вечер с Cocktails with the Local 🍸",
+    secretStop: "Секретная остановка",
+    secretText: "Куда идём дальше — сюрприз! Бар появится здесь, когда мы придём 🤫",
+    newBar: "Открыта новая остановка! 🍸",
+    waitNext: "Отлично! Следующий бар — секрет. Он появится здесь, когда мы придём 🤫"
   },
   en: {
     tagline: "Almaty bar hopping",
@@ -96,7 +100,11 @@ window.I18N = {
     cardNight: "My night out",
     cardOf: "{name} · {date}",
     thanks: "Thanks for hopping with us!",
-    shareText: "My night with Cocktails with the Local 🍸"
+    shareText: "My night with Cocktails with the Local 🍸",
+    secretStop: "Secret stop",
+    secretText: "Where we go next is a surprise! The bar will appear here when we arrive 🤫",
+    newBar: "A new stop is open! 🍸",
+    waitNext: "Great! The next bar is a secret — it'll appear here when we arrive 🤫"
   }
 };
 

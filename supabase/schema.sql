@@ -27,6 +27,8 @@ create table if not exists tours (
   bar_ids uuid[] not null default '{}',
   created_at timestamptz not null default now()
 );
+-- сколько баров маршрута гид уже открыл гостям
+alter table tours add column if not exists revealed int not null default 1;
 
 -- Отзывы гостей: один отзыв на гостя на бар в рамках экскурсии
 create table if not exists reviews (
@@ -68,10 +70,13 @@ create or replace function get_tour(p_code text) returns json
 language sql stable security definer set search_path = public as $$
   select json_build_object(
     'id', t.id, 'code', t.code, 'date', t.tour_date, 'title', t.title,
+    'total', coalesce(array_length(t.bar_ids, 1), 0),
+    -- гостям отдаём только бары, которые гид уже открыл
     'bars', coalesce((
       select json_agg(json_build_object('id', b.id, 'name', b.name, 'address', b.address, 'map_url', b.map_url) order by x.ord)
       from unnest(t.bar_ids) with ordinality as x(bid, ord)
       join bars b on b.id = x.bid
+      where x.ord <= t.revealed
     ), '[]'::json)
   )
   from tours t
@@ -93,8 +98,8 @@ create or replace function save_review(
 ) returns void
 language plpgsql security definer set search_path = public as $$
 begin
-  if not exists (select 1 from tours where id = p_tour and p_bar = any(bar_ids)) then
-    raise exception 'bar is not part of this tour';
+  if not exists (select 1 from tours where id = p_tour and array_position(bar_ids, p_bar) between 1 and revealed) then
+    raise exception 'bar is not open in this tour';
   end if;
   if coalesce(trim(p_name), '') = '' then
     raise exception 'name required';

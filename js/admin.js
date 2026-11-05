@@ -51,6 +51,7 @@
   }
   const barName = (id) => state.bars.find((b) => b.id === id)?.name || "—";
   const tourById = (id) => state.tours.find((t) => t.id === id);
+  const rev = (tour) => Math.min(tour.revealed ?? 1, tour.bar_ids.length);
 
   // ---------- вход ----------
   async function start() {
@@ -161,8 +162,13 @@
           <div class="list-item">
             <div class="main">
               <div><span class="tag">${esc(x.code)}</span> &nbsp;<strong>${esc(fmtDate(x.tour_date))}</strong>${x.title ? " · " + esc(x.title) : ""}</div>
-              <div class="muted small" style="margin-top:4px">${x.bar_ids.map((id, i) => `${i + 1}. ${esc(barName(id))}`).join(" → ") || "маршрут пуст"}</div>
+              <div class="muted small" style="margin-top:4px">${x.bar_ids.map((id, i) => i < rev(x) ? `<span style="color:var(--text)">${i + 1}. ${esc(barName(id))}</span>` : `🔒 ${i + 1}. ${esc(barName(id))}`).join(" → ") || "маршрут пуст"}</div>
               <div class="small" style="margin-top:2px">Гостей оставили отзывы: <strong>${n}</strong></div>
+              <div class="reveal">
+                <span class="small">Гости видят: <strong>${rev(x)} из ${x.bar_ids.length}</strong></span>
+                ${rev(x) < x.bar_ids.length ? `<button class="btn sm primary" data-action="reveal" data-id="${x.id}" data-n="${rev(x) + 1}">Открыть следующий: ${esc(barName(x.bar_ids[rev(x)]))} ▶</button>` : `<span class="tag g">весь маршрут открыт</span>`}
+                ${rev(x) > 1 ? `<button class="btn sm ghost" data-action="reveal" data-id="${x.id}" data-n="${rev(x) - 1}" title="Спрятать последний открытый бар">↩ Спрятать</button>` : ""}
+              </div>
             </div>
             <div class="row">
               <button class="btn sm green" data-action="qr" data-id="${x.id}">QR и ссылка</button>
@@ -384,6 +390,19 @@
         const n = state.reviews.filter((r) => r.tour_id === id).length;
         if (!confirm("Удалить экскурсию " + tourById(id).code + "?" + (n ? `\nВместе с ней удалятся ${n} отзывов!` : ""))) return;
         try { await DB.deleteTour(id); toast("Экскурсия удалена"); await reload(); } catch (err) { toast(errMsg(err), true); }
+        break;
+      }
+      case "reveal": {
+        const n = +el.dataset.n;
+        const x = tourById(id);
+        const prev = rev(x);
+        el.disabled = true;
+        try {
+          await DB.setRevealed(id, n);
+          x.revealed = n;
+          render();
+          toast(n > prev ? "Гости видят: " + barName(x.bar_ids[n - 1]) : "Бар снова спрятан");
+        } catch (err) { el.disabled = false; toast(errMsg(err), true); }
         break;
       }
       case "qr": state.qrOpen = state.qrOpen === id ? null : id; render(); break;
