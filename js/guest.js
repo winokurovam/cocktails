@@ -3,7 +3,7 @@
   const $ = (s, el = document) => el.querySelector(s);
   const app = $("#app");
   const params = new URLSearchParams(location.search);
-  const state = { tour: null, guest: null, reviews: {}, open: null, tab: "bars", drafts: {}, view: null };
+  const state = { tour: null, guest: null, reviews: {}, open: null, tab: "bars", drafts: {}, view: null, photos: [], photosLoaded: false, uploading: false };
 
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const isUuid = (s) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s || "");
@@ -115,9 +115,10 @@
       <div class="progress"><div style="width:${total ? (done / total) * 100 : 0}%"></div></div>
       <nav class="tabs">
         <button type="button" data-action="tab" data-tab="bars" class="${state.tab === "bars" ? "on" : ""}">🍸 ${esc(t("tabBars"))}</button>
+        <button type="button" data-action="tab" data-tab="photos" class="${state.tab === "photos" ? "on" : ""}">📸 ${esc(t("tabPhotos"))}</button>
         <button type="button" data-action="tab" data-tab="my" class="${state.tab === "my" ? "on" : ""}">💗 ${esc(t("tabMy"))}</button>
       </nav>
-      <div id="tab">${state.tab === "bars" ? barsTab() : myTab()}</div>`;
+      <div id="tab">${state.tab === "bars" ? barsTab() : state.tab === "photos" ? photosTab() : myTab()}</div>`;
   }
 
   function barsTab() {
@@ -145,6 +146,7 @@
     const sub = r
       ? `<span class="st">${starsText(r.rating)}</span>${r.cocktails?.length ? " · " + esc(t("cocktailsN", { n: r.cocktails.length })) : ""}`
       : esc(t("notRated"));
+    const community = bar.count ? `<span class="bar-sub community">${esc(t("communityRating", { avg: Number(bar.avg).toFixed(1), n: bar.count }))}</span>` : "";
     return `
       <article class="bar ${open ? "open" : ""} ${r ? "done" : ""}" data-bar="${bar.id}">
         <button type="button" class="bar-head" data-action="toggle">
@@ -153,6 +155,7 @@
             <span class="small muted">${esc(t("stop"))} ${i + 1}</span>
             <span class="bar-name">${esc(bar.name)}</span>
             <span class="bar-sub">${sub}</span>
+            ${community}
           </span>
           <span class="chev">›</span>
         </button>
@@ -277,6 +280,7 @@
     if (action === "tab") {
       state.tab = el.dataset.tab;
       renderMain();
+      if (state.tab === "photos") loadPhotos();
       window.scrollTo({ top: 0, behavior: "smooth" });
     } else if (action === "toggle") {
       state.open = state.open === barId ? null : barId;
@@ -314,6 +318,8 @@
       }, "image/png");
     } else if (action === "share") {
       await share();
+    } else if (action === "view") {
+      openLightbox(el.dataset.id);
     }
   });
 
@@ -540,6 +546,87 @@
     ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
   }
 
+  // ---------- фотоальбом ----------
+  function photosTab() {
+    const list = state.photos;
+    return `
+      <section class="card">
+        <div class="muted small">${esc(t("albumHint"))}</div>
+        <label class="btn primary block" style="margin-top:12px" ${state.uploading ? "disabled" : ""}>📸 ${esc(t("addPhotos"))}
+          <input type="file" id="photoInput" accept="image/*" multiple hidden ${state.uploading ? "disabled" : ""}>
+        </label>
+        <div class="small muted" id="upl" style="text-align:center;margin-top:8px"></div>
+      </section>
+      ${!state.photosLoaded ? `<div class="loading">📸 …</div>`
+        : list.length ? `<div class="album">${list.map((p) => `
+          <button type="button" class="ph" data-action="view" data-id="${p.id}">
+            <img src="${esc(p.url)}" alt="" loading="lazy">
+            <span class="ph-name">${esc(p.author_name)}</span>
+          </button>`).join("")}</div>`
+        : `<section class="card hero"><div class="emoji-big">📷</div><p>${esc(t("photosEmpty"))}</p></section>`}`;
+  }
+
+  async function loadPhotos() {
+    try {
+      state.photos = await DB.getPhotos(state.tour.id, state.guest.id);
+      state.photosLoaded = true;
+    } catch (e) { console.error(e); state.photosLoaded = true; }
+    if (state.tab === "photos" && state.view === renderMain && !state.uploading) renderMain();
+  }
+
+  app.addEventListener("change", async (e) => {
+    if (e.target.id !== "photoInput" || !e.target.files.length) return;
+    const files = [...e.target.files].slice(0, 20);
+    state.uploading = true;
+    renderMain();
+    let ok = 0;
+    for (let i = 0; i < files.length; i++) {
+      const upl = $("#upl");
+      if (upl) upl.textContent = t("uploading", { a: i + 1, b: files.length });
+      try {
+        const blob = await resizeImage(files[i], DB.mode === "demo" ? 800 : 1600);
+        await DB.addPhoto(state.tour.id, state.guest.id, state.guest.name, blob);
+        ok++;
+      } catch (err) { console.error(err); toast(t("uploadError"), true); break; }
+    }
+    state.uploading = false;
+    await loadPhotos();
+    renderMain();
+    if (ok) toast(t("photosAdded"));
+  });
+
+  function openLightbox(id) {
+    const p = state.photos.find((x) => x.id === id);
+    if (!p) return;
+    const box = document.createElement("div");
+    box.className = "lightbox";
+    box.innerHTML = `
+      <div class="lb-inner">
+        <img src="${esc(p.url)}" alt="">
+        <div class="lb-bar">
+          <span>📸 ${esc(p.author_name)}</span>
+          <span class="row">
+            <a class="btn sm" href="${esc(p.url)}" target="_blank" rel="noopener" download>${esc(t("openPhoto"))}</a>
+            ${p.mine ? `<button type="button" class="btn sm danger" data-lb="delete">${esc(t("deletePhoto"))}</button>` : ""}
+            <button type="button" class="btn sm" data-lb="close">✕ ${esc(t("close"))}</button>
+          </span>
+        </div>
+      </div>`;
+    const close = () => { box.remove(); document.removeEventListener("keydown", onKey); };
+    const onKey = (e) => { if (e.key === "Escape") close(); };
+    box.addEventListener("click", async (e) => {
+      const a = e.target.closest("[data-lb]")?.dataset.lb;
+      if (e.target === box || a === "close") return close();
+      if (a === "delete" && confirm(t("deleteConfirm"))) {
+        try { await DB.deleteMyPhoto(p.id, state.guest.id); } catch (err) { console.error(err); }
+        close();
+        loadPhotos();
+      }
+    });
+    document.addEventListener("keydown", onKey);
+    document.body.appendChild(box);
+  }
+
   // ---------- новые бары: гид открывает их по ходу вечера ----------
   let pollTimer = null;
   function startPolling() {
@@ -549,6 +636,7 @@
   }
   async function checkForNewBars() {
     if (document.hidden || !state.tour || !state.guest?.name || state.view !== renderMain) return;
+    if (state.tab === "photos" && !state.uploading && !document.querySelector(".lightbox")) loadPhotos();
     // не перерисовываем, пока гость печатает — проверим в следующий раз
     const ae = document.activeElement;
     if (ae && app.contains(ae) && /INPUT|TEXTAREA/.test(ae.tagName)) return;

@@ -67,6 +67,39 @@
       async setRevealed(id, n) {
         check(await sb.from("tours").update({ revealed: n }).eq("id", id));
       },
+      // ---- фотоальбом ----
+      photoUrl(path) {
+        return sb.storage.from("tour-photos").getPublicUrl(path).data.publicUrl;
+      },
+      async _upload(tourId, blob) {
+        const path = tourId + "/" + uuid() + ".jpg";
+        const { error } = await sb.storage.from("tour-photos").upload(path, blob, { contentType: "image/jpeg", cacheControl: "31536000" });
+        if (error) throw error;
+        return path;
+      },
+      async getPhotos(tourId, guestId) {
+        const rows = check(await sb.rpc("get_photos", { p_tour: tourId, p_guest: guestId })) || [];
+        return rows.map((r) => Object.assign(r, { url: this.photoUrl(r.path) }));
+      },
+      async addPhoto(tourId, guestId, name, blob) {
+        const path = await this._upload(tourId, blob);
+        check(await sb.rpc("add_photo", { p_tour: tourId, p_guest: guestId, p_name: name, p_path: path }));
+      },
+      async deleteMyPhoto(id, guestId) {
+        check(await sb.rpc("delete_my_photo", { p_id: id, p_guest: guestId }));
+      },
+      async listPhotos() {
+        const rows = check(await sb.from("photos").select("*").order("created_at", { ascending: false }));
+        return rows.map((r) => Object.assign(r, { url: this.photoUrl(r.path) }));
+      },
+      async guideAddPhoto(tourId, blob) {
+        const path = await this._upload(tourId, blob);
+        check(await sb.from("photos").insert({ tour_id: tourId, author_name: "Гид", path }));
+      },
+      async guideDeletePhoto(photo) {
+        await sb.storage.from("tour-photos").remove([photo.path]);
+        check(await sb.from("photos").delete().eq("id", photo.id));
+      },
       async listReviews() {
         return check(await sb.from("reviews").select("*").order("created_at", { ascending: false }));
       }
@@ -107,7 +140,11 @@
         return {
           id: tour.id, code: tour.code, date: tour.tour_date, title: tour.title,
           total: tour.bar_ids.length,
-          bars: tour.bar_ids.slice(0, revealed).map((id) => d.bars.find((b) => b.id === id)).filter(Boolean).map(clone)
+          bars: tour.bar_ids.slice(0, revealed).map((id) => d.bars.find((b) => b.id === id)).filter(Boolean).map((b) => {
+            const rs = d.reviews.filter((r) => r.bar_id === b.id);
+            const avg = rs.length ? Math.round((rs.reduce((s, r) => s + r.rating, 0) / rs.length) * 10) / 10 : null;
+            return Object.assign(clone(b), { avg, count: rs.length });
+          })
         };
       },
       async getMyReviews(tourId, guestId) {
@@ -159,10 +196,43 @@
         d.tours.find((x) => x.id === id).revealed = n;
         persist();
       },
+      // ---- фотоальбом (в демо-режиме фото хранятся в браузере) ----
+      _toDataUrl(blob) {
+        return new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(blob); });
+      },
+      async getPhotos(tourId, guestId) {
+        return (load().photos || []).filter((p) => p.tour_id === tourId)
+          .sort((a, b) => b.created_at.localeCompare(a.created_at))
+          .map((p) => ({ id: p.id, author_name: p.author_name, url: p.url, created_at: p.created_at, mine: p.guest_id === guestId }));
+      },
+      async addPhoto(tourId, guestId, name, blob) {
+        const d = load();
+        (d.photos = d.photos || []).push({ id: uuid(), tour_id: tourId, guest_id: guestId, author_name: name, url: await this._toDataUrl(blob), created_at: new Date().toISOString() });
+        mem = d; persist();
+      },
+      async deleteMyPhoto(id, guestId) {
+        const d = load();
+        d.photos = (d.photos || []).filter((p) => !(p.id === id && p.guest_id === guestId));
+        persist();
+      },
+      async listPhotos() {
+        return clone(load().photos || []).sort((a, b) => b.created_at.localeCompare(a.created_at));
+      },
+      async guideAddPhoto(tourId, blob) {
+        const d = load();
+        (d.photos = d.photos || []).push({ id: uuid(), tour_id: tourId, guest_id: null, author_name: "Гид", url: await this._toDataUrl(blob), created_at: new Date().toISOString() });
+        mem = d; persist();
+      },
+      async guideDeletePhoto(photo) {
+        const d = load();
+        d.photos = (d.photos || []).filter((p) => p.id !== photo.id);
+        persist();
+      },
       async deleteTour(id) {
         const d = load();
         d.tours = d.tours.filter((x) => x.id !== id);
         d.reviews = d.reviews.filter((r) => r.tour_id !== id);
+        d.photos = (d.photos || []).filter((p) => p.tour_id !== id);
         persist();
       },
       async listReviews() {
@@ -170,6 +240,19 @@
       }
     };
   }
+
+  // Уменьшаем фото перед загрузкой (быстрее и экономнее для мобильного интернета)
+  window.resizeImage = async function (file, max) {
+    const url = URL.createObjectURL(file);
+    try {
+      const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
+      const k = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+      const c = document.createElement("canvas");
+      c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      return await new Promise((res) => c.toBlob(res, "image/jpeg", 0.82));
+    } finally { URL.revokeObjectURL(url); }
+  };
 
   const configured = cfg.SUPABASE_URL && cfg.SUPABASE_ANON_KEY;
   if (configured && !window.supabase) {

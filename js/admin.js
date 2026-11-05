@@ -9,7 +9,7 @@
 
   const state = {
     tab: "tours", bars: [], tours: [], reviews: [],
-    editBar: null, editTour: null, qrOpen: null, filterTour: ""
+    editBar: null, editTour: null, qrOpen: null, filterTour: "", photos: [], photoTour: "", uploading: false
   };
 
   let toastTimer;
@@ -89,8 +89,11 @@
 
   async function reload() {
     try {
-      const [bars, tours, reviews] = await Promise.all([DB.listBars(), DB.listTours(), DB.listReviews()]);
-      Object.assign(state, { bars, tours, reviews });
+      const [bars, tours, reviews, photos] = await Promise.all([
+        DB.listBars(), DB.listTours(), DB.listReviews(),
+        DB.listPhotos().catch((e) => { console.warn("photos:", e); return []; })
+      ]);
+      Object.assign(state, { bars, tours, reviews, photos });
     } catch (e) {
       console.error(e);
       app.innerHTML = `<section class="card"><p class="err">${esc(errMsg(e))}</p>
@@ -107,8 +110,9 @@
         <button data-action="tab" data-tab="tours" class="${state.tab === "tours" ? "on" : ""}">🗺 Экскурсии</button>
         <button data-action="tab" data-tab="bars" class="${state.tab === "bars" ? "on" : ""}">🍸 Бары</button>
         <button data-action="tab" data-tab="reviews" class="${state.tab === "reviews" ? "on" : ""}">💬 Отзывы (${state.reviews.length})</button>
+        <button data-action="tab" data-tab="photos" class="${state.tab === "photos" ? "on" : ""}">📸 Фото (${state.photos.length})</button>
       </nav>
-      ${state.tab === "tours" ? toursTab() : state.tab === "bars" ? barsTab() : reviewsTab()}`;
+      ${state.tab === "tours" ? toursTab() : state.tab === "bars" ? barsTab() : state.tab === "photos" ? photosTab() : reviewsTab()}`;
     if (state.qrOpen) drawQr(state.qrOpen);
   }
 
@@ -284,6 +288,32 @@
       </section>`;
   }
 
+  // --- Фото ---
+  function photosTab() {
+    if (!state.photoTour && state.tours[0]) state.photoTour = state.tours[0].id;
+    const list = state.photos.filter((p) => !state.photoTour || p.tour_id === state.photoTour);
+    return `
+      <section class="card">
+        <div class="row">
+          <select id="p-tour" class="grow">
+            ${state.tours.map((x) => `<option value="${x.id}" ${state.photoTour === x.id ? "selected" : ""}>${esc(x.code)} · ${esc(fmtDate(x.tour_date))}</option>`).join("")}
+          </select>
+          <label class="btn primary" ${state.uploading || !state.photoTour ? "disabled" : ""}>📸 ${state.uploading ? "Загружаю…" : "Добавить фото"}
+            <input type="file" id="g-photo" accept="image/*" multiple hidden ${state.uploading ? "disabled" : ""}>
+          </label>
+          <button class="btn ghost" data-action="refresh">↻ Обновить</button>
+        </div>
+        <p class="muted small" style="margin:10px 0 0">Гости этой экскурсии видят общий альбом во вкладке «Фото». Загружать фото они могут в день экскурсии и ещё 3 дня после.</p>
+      </section>
+      ${list.length ? `<div class="album">${list.map((p) => `
+        <div class="ph">
+          <a href="${esc(p.url)}" target="_blank" rel="noopener"><img src="${esc(p.url)}" alt="" loading="lazy"></a>
+          <span class="ph-name">${esc(p.author_name)} · ${esc(fmtTime(p.created_at))}</span>
+          <button class="icon-btn del" style="background:rgba(0,0,0,.55);color:#fff" title="Удалить" data-action="del-photo" data-id="${p.id}">✕</button>
+        </div>`).join("")}</div>`
+        : `<section class="card"><p class="muted">В альбоме этой экскурсии пока нет фото.</p></section>`}`;
+  }
+
   function downloadCsv() {
     const list = state.reviews.filter((r) => !state.filterTour || r.tour_id === state.filterTour);
     const q = (v) => '"' + String(v ?? "").replace(/"/g, '""') + '"';
@@ -322,12 +352,29 @@
 
   app.addEventListener("change", (e) => {
     if (e.target.id === "f-tour") { state.filterTour = e.target.value; render(); }
+    if (e.target.id === "p-tour") { state.photoTour = e.target.value; render(); }
     if (e.target.id === "t-date" && state.editTour && !state.editTour.id && !state.editTour.codeTouched) {
       syncTourForm();
       state.editTour.code = genCode(state.editTour.tour_date);
       $("#t-code").value = state.editTour.code;
     }
   });
+  app.addEventListener("change", async (e) => {
+    if (e.target.id !== "g-photo" || !e.target.files.length) return;
+    const files = [...e.target.files].slice(0, 30);
+    state.uploading = true; render();
+    let ok = 0;
+    for (const f of files) {
+      try {
+        await DB.guideAddPhoto(state.photoTour, await resizeImage(f, DB.mode === "demo" ? 800 : 1600));
+        ok++;
+      } catch (err) { console.error(err); toast(errMsg(err), true); break; }
+    }
+    state.uploading = false;
+    if (ok) toast("Добавлено фото: " + ok);
+    await reload();
+  });
+
   app.addEventListener("input", (e) => {
     if (e.target.id === "t-code" && state.editTour) state.editTour.codeTouched = true;
   });
@@ -421,6 +468,12 @@
         break;
       case "tour-reviews": state.filterTour = id; state.tab = "reviews"; render(); break;
       case "csv": downloadCsv(); break;
+      case "del-photo": {
+        const ph = state.photos.find((p) => p.id === id);
+        if (!ph || !confirm("Удалить это фото из альбома?")) return;
+        try { await DB.guideDeletePhoto(ph); toast("Фото удалено"); await reload(); } catch (err) { toast(errMsg(err), true); }
+        break;
+      }
       case "refresh": await reload(); toast("Обновлено"); break;
     }
   });
