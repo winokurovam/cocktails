@@ -303,7 +303,7 @@
           </label>
           <button class="btn ghost" data-action="refresh">↻ Обновить</button>
         </div>
-        <p class="muted small" style="margin:10px 0 0">Гости этой экскурсии видят общий альбом во вкладке «Фото». Загружать фото они могут в день экскурсии и ещё 3 дня после.</p>
+        <p class="muted small" style="margin:10px 0 0">Гости этой экскурсии видят общий альбом во вкладке «Альбом». Загружать фото они могут в день экскурсии и ещё 3 дня после.</p>
       </section>
       ${list.length ? `<div class="album">${list.map((p) => `
         <div class="ph">
