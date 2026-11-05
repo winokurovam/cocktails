@@ -41,8 +41,8 @@
 1. В репозитории на GitHub: **Settings → Pages**.
 2. *Source*: **Deploy from a branch**, ветка `main`, папка `/ (root)`, затем **Save**.
 3. Через минуту сайт будет доступен:
-   - для гостей: <https://winokurovam.github.io/Barhopping-/>
-   - кабинет гида: <https://winokurovam.github.io/Barhopping-/admin.html>
+   - для гостей: <https://winokurovam.github.io/cocktails/>
+   - кабинет гида: <https://winokurovam.github.io/cocktails/admin.html>
 
 ## Как проводить экскурсию
 
